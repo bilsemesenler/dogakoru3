@@ -13,60 +13,54 @@
 <body>
     <div class="app-container">
         
-        <!-- 1. ANA SAYFA -->
+        <!-- 1. ANA SAYFA VE FOTOĞRAF ÇEKME EKRANI -->
         <section id="home-screen" class="screen active">
             <div class="card">
                 <h1 class="title">Doğa Koruyucuları</h1>
-                <p class="description">Geri dönüşüm malzemelerini tanıyarak sıfır atık projesine katkı sağlayın.</p>
-                <button id="start-btn" class="btn btn-primary" onclick="initCamera()">
-                    <span class="icon">📷</span> Kamera ile Tara
+                <p class="description">Geri dönüşüm malzemelerini fotoğraflayarak sıfır atık projesine katkı sağlayın.</p>
+                
+                <!-- HTML5 Native Kamera Tetikleyici -->
+                <input type="file" accept="image/*" capture="environment" id="camera-input" class="hidden">
+                
+                <button id="start-btn" class="btn btn-primary" onclick="triggerCamera()">
+                    <span class="icon">📸</span> Atığı Fotoğrafla
                 </button>
-                <p id="loading-text" class="hidden">Model Yükleniyor, lütfen bekleyin...</p>
+                
+                <p id="loading-text" class="hidden">Yapay Zeka Atığı İnceliyor...</p>
                 <p id="error-text" class="error hidden"></p>
             </div>
         </section>
 
-        <!-- 2. KAMERA TARAMA EKRANI -->
-        <section id="camera-screen" class="screen hidden">
-            <div class="camera-header">
-                <h2>Atık Taranıyor...</h2>
-                <p>Kamerayı atığa doğru tutun</p>
-            </div>
-            <div class="canvas-container">
-                <!-- Teachable Machine WebCam buraya render edilecek -->
-                <div id="webcam-container"></div>
-                <div class="scan-line"></div>
-            </div>
-            <button class="btn btn-secondary" onclick="stopScanAndReturn()">Geri Dön</button>
-        </section>
+        <!-- Analiz İçin Gizli Resim Alanı -->
+        <img id="preview-image" class="hidden" alt="Analiz Edilen Görüntü">
 
-        <!-- 3. SONUÇ EKRANI -->
+        <!-- 2. SONUÇ EKRANI -->
         <section id="result-screen" class="screen hidden">
             <div class="card result-card">
                 <h2>Tanıma Sonucu</h2>
                 
                 <div class="snapshot-container">
-                    <img id="snapshot-img" src="" alt="Yakalanan Görüntü">
+                    <img id="snapshot-img" src="" alt="Çekilen Atık Fotoğrafı">
                 </div>
 
                 <div class="primary-result">
                     <h3 id="best-match-class">Tespit Edilen Atık: -</h3>
-                    <p id="best-match-prob" class="confidence">Eşleşme: %0</p>
+                    <p id="best-match-prob" class="confidence">Güven Oranı: %0</p>
                 </div>
 
-                <div class="thank-you-box">
+                <div class="thank-you-box" id="feedback-box">
                     Sıfır atık projesine katkınızdan dolayı teşekkür ederiz 🌍
                 </div>
 
                 <div class="all-results">
-                    <h4>Tüm Sınıflar</h4>
+                    <h4>Eşleşme Detayları</h4>
                     <div id="label-container">
-                        <!-- JS ile progress barlar buraya eklenecek -->
+                        <!-- İstatistikler JavaScript ile buraya çizilecek -->
                     </div>
                 </div>
 
-                <button class="btn btn-primary btn-large" onclick="restartScan()">
-                    <span class="icon">🔄</span> Tekrar Tanıla
+                <button class="btn btn-primary btn-large" onclick="resetApp()">
+                    <span class="icon">🔄</span> Yeni Atık Fotoğrafla
                 </button>
             </div>
         </section>

@@ -1,11 +1,11 @@
-// Teachable Machine Model URL'si (Kendi local klasörümüz)
+// Model Yolları
 const URL = "./model/";
 
-let model, webcam, labelContainer, maxPredictions;
-let isScanning = false;
-const CONFIDENCE_THRESHOLD = 0.70; // %70 Eşik değeri
+let model, maxPredictions;
+let isModelLoaded = false;
+const THRESHOLD = 0.70; // %70 Eşik
 
-// Ekranları Yönetme Fonksiyonu
+// Ekran Geçiş Fonksiyonu
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
@@ -15,99 +15,114 @@ function showScreen(screenId) {
     document.getElementById(screenId).classList.add('active');
 }
 
-// 1. Kamerayı ve Modeli Başlat
-async function initCamera() {
+// 1. Modeli Yükle (Uygulama açıldığında veya ilk fotoğrafta yüklenir)
+async function loadModel() {
+    if (isModelLoaded) return true;
+    
+    try {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+        
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+        isModelLoaded = true;
+        return true;
+    } catch (error) {
+        console.error("Model yükleme hatası:", error);
+        return false;
+    }
+}
+
+// 2. Kamera Butonuna Basıldığında Input'u Tetikle
+async function triggerCamera() {
+    const errorText = document.getElementById("error-text");
+    errorText.classList.add("hidden");
+    
+    // Cihazın yerel kamerasını/galerisini açar
+    document.getElementById('camera-input').click();
+}
+
+// 3. Fotoğraf Çekildiğinde Tetiklenen Olay
+document.getElementById('camera-input').addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return; // Kullanıcı iptal ettiyse çık
+
     const startBtn = document.getElementById("start-btn");
     const loadingText = document.getElementById("loading-text");
     const errorText = document.getElementById("error-text");
 
+    // UI'ı Yükleniyor durumuna al
     startBtn.classList.add("hidden");
     loadingText.classList.remove("hidden");
-    errorText.classList.add("hidden");
 
-    try {
-        // Modeli yükle
-        const modelURL = URL + "model.json";
-        const metadataURL = URL + "metadata.json";
-        model = await tmImage.load(modelURL, metadataURL);
-        maxPredictions = model.getTotalClasses();
-
-        // Kamerayı ayarla
-        const flip = true; // Ön kamera için true, arka kamera için mobil cihazlarda false gerekebilir
-        webcam = new tmImage.Webcam(300, 300, flip); // Genişlik, Yükseklik, Flip
-        
-        // Kamera izni iste
-        await webcam.setup({ facingMode: "environment" }); // Mobil cihazlarda arka kamerayı zorlamak için
-        await webcam.play();
-        
-        window.requestAnimationFrame(loop);
-
-        // Webcam canvas'ını DOM'a ekle
-        const webcamContainer = document.getElementById("webcam-container");
-        webcamContainer.innerHTML = ""; // Temizle
-        webcamContainer.appendChild(webcam.canvas);
-
-        isScanning = true;
-        showScreen('camera-screen');
-
-    } catch (error) {
-        console.error("Kamera başlatılamadı:", error);
-        errorText.innerText = "Kamera izni reddedildi veya model bulunamadı.";
+    // Modeli yükle (Eğer henüz yüklenmediyse)
+    const loaded = await loadModel();
+    if (!loaded) {
+        loadingText.classList.add("hidden");
+        errorText.innerText = "Yapay Zeka modeli yüklenemedi. Lütfen internet bağlantınızı kontrol edin.";
         errorText.classList.remove("hidden");
         startBtn.classList.remove("hidden");
-    } finally {
-        loadingText.classList.add("hidden");
+        return;
     }
-}
 
-// 2. Canlı Kamera Döngüsü
-async function loop() {
-    if (!isScanning) return; // Tarama durdurulduysa döngüden çık
-    webcam.update(); // Webcam frame'ini güncelle
-    await predictFrame();
-    window.requestAnimationFrame(loop);
-}
+    // Seçilen dosyayı tarayıcıda geçici bir URL'ye çevirip gizli IMG etiketine bas
+    const imgElement = document.getElementById('preview-image');
+    imgElement.src = window.URL.createObjectURL(file);
 
-// 3. Tahmin Fonksiyonu
-async function predictFrame() {
-    // Tahminleri al
-    const predictions = await model.predict(webcam.canvas);
-    
-    // En yüksek olasılığa sahip sınıfı bul
-    let bestMatch = predictions[0];
-    for (let i = 1; i < maxPredictions; i++) {
-        if (predictions[i].probability > bestMatch.probability) {
-            bestMatch = predictions[i];
+    // Resim DOM'a yüklendiğinde analizi başlat
+    imgElement.onload = async () => {
+        try {
+            await analyzeImage(imgElement);
+        } catch (err) {
+            console.error(err);
+            errorText.innerText = "Görüntü analiz edilirken bir hata oluştu.";
+            errorText.classList.remove("hidden");
+            startBtn.classList.remove("hidden");
+            loadingText.classList.add("hidden");
         }
-    }
+    };
+});
 
-    // Eşik kontrolü (Threshold >= 0.70)
-    if (bestMatch.probability >= CONFIDENCE_THRESHOLD) {
-        isScanning = false; // Döngüyü durdur
-        captureSnapshotAndShowResults(bestMatch, predictions);
-    }
+// 4. Teachable Machine Görüntü Analizi
+async function analyzeImage(imageElement) {
+    // Fotoğraf üzerinden tek seferlik tahmin yap
+    const predictions = await model.predict(imageElement);
+    
+    // Sonuçları sırala ve en yüksek olanı bul
+    predictions.sort((a, b) => b.probability - a.probability);
+    const bestMatch = predictions[0];
+
+    showResults(bestMatch, predictions, imageElement.src);
 }
 
-// 4. Snapshot Al ve Sonuçları Göster
-function captureSnapshotAndShowResults(bestMatch, allPredictions) {
-    // Kamerayı durdur
-    webcam.stop();
+// 5. Sonuçları Ekrana Yazdır
+function showResults(bestMatch, allPredictions, imageSrc) {
+    // Fotoğrafı sonuç ekranına koy
+    document.getElementById("snapshot-img").src = imageSrc;
 
-    // Canvas üzerinden o anki görüntüyü al
-    const snapshotDataUrl = webcam.canvas.toDataURL("image/png");
-    document.getElementById("snapshot-img").src = snapshotDataUrl;
-
-    // En iyi eşleşmeyi yazdır
-    document.getElementById("best-match-class").innerText = `Tespit Edilen Atık: ${bestMatch.className}`;
     const percentProb = Math.round(bestMatch.probability * 100);
-    document.getElementById("best-match-prob").innerText = `Eşleşme: %${percentProb}`;
+    const feedbackBox = document.getElementById("feedback-box");
+    
+    // Eşik Kontrolü (%70 ve üzeri mi?)
+    if (bestMatch.probability >= THRESHOLD) {
+        document.getElementById("best-match-class").innerText = `Tespit Edilen Atık: ${bestMatch.className}`;
+        document.getElementById("best-match-prob").innerText = `Güven Oranı: %${percentProb}`;
+        document.getElementById("best-match-prob").style.color = "var(--primary-color)";
+        
+        feedbackBox.className = "thank-you-box";
+        feedbackBox.innerText = "Sıfır atık projesine katkınızdan dolayı teşekkür ederiz 🌍";
+    } else {
+        document.getElementById("best-match-class").innerText = `Tanımlanamayan Cisim`;
+        document.getElementById("best-match-prob").innerText = `En Yakın Eşleşme: %${percentProb} (${bestMatch.className})`;
+        document.getElementById("best-match-prob").style.color = "var(--error-color)";
+        
+        feedbackBox.className = "thank-you-box warning-box";
+        feedbackBox.innerText = "Tam olarak emin olamadım. Atığı daha aydınlık bir ortamda, net bir şekilde tekrar fotoğraflamayı dener misiniz? 📸";
+    }
 
-    // Tüm sonuçları listele (Progress Bar ile)
+    // Detaylı Bar İstatistikleri
     const labelContainer = document.getElementById("label-container");
-    labelContainer.innerHTML = ""; // Önceki sonuçları temizle
-
-    // Sonuçları büyükten küçüğe sırala
-    allPredictions.sort((a, b) => b.probability - a.probability);
+    labelContainer.innerHTML = ""; 
 
     for (let i = 0; i < maxPredictions; i++) {
         const probValue = Math.round(allPredictions[i].probability * 100);
@@ -118,31 +133,27 @@ function captureSnapshotAndShowResults(bestMatch, allPredictions) {
         row.innerHTML = `
             <div class="class-name">${allPredictions[i].className}</div>
             <div class="progress-wrapper">
-                <div class="progress-fill" style="width: ${probValue}%"></div>
+                <!-- Bar animasyonu için genişliği satır içi stille veriyoruz -->
+                <div class="progress-fill" style="width: 0%"></div> 
             </div>
             <div class="prob-text">%${probValue}</div>
         `;
         labelContainer.appendChild(row);
+
+        // Animasyonun tetiklenmesi için küçük bir gecikme (Reflow işlemi sonrası)
+        setTimeout(() => {
+            row.querySelector('.progress-fill').style.width = `${probValue}%`;
+        }, 50);
     }
 
-    // Sonuç ekranına geç
+    // Arayüz geçişleri
+    document.getElementById("loading-text").classList.add("hidden");
     showScreen('result-screen');
 }
 
-// 5. Yeniden Tanıla
-function restartScan() {
-    document.getElementById("start-btn").classList.remove("hidden");
-    showScreen('home-screen');
-    // Canvas'ı ve resmi temizle
-    document.getElementById("snapshot-img").src = "";
-}
-
-// 6. Taramayı İptal Et (Geri Dön)
-function stopScanAndReturn() {
-    isScanning = false;
-    if(webcam) {
-        webcam.stop();
-    }
+// 6. Sistemi Sıfırla ve Yeni Fotoğrafa Hazırlan
+function resetApp() {
+    document.getElementById('camera-input').value = ""; // Input'u temizle
     document.getElementById("start-btn").classList.remove("hidden");
     showScreen('home-screen');
 }
