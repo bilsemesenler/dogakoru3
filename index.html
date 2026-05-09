@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Doğa Koruyucuları - Sıfır Atık</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- TensorFlow.js ve Teachable Machine Kütüphaneleri -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        
+        <!-- 1. ANA SAYFA -->
+        <section id="home-screen" class="screen active">
+            <div class="card">
+                <h1 class="title">Doğa Koruyucuları</h1>
+                <p class="description">Geri dönüşüm malzemelerini tanıyarak sıfır atık projesine katkı sağlayın.</p>
+                <button id="start-btn" class="btn btn-primary" onclick="initCamera()">
+                    <span class="icon">📷</span> Kamera ile Tara
+                </button>
+                <p id="loading-text" class="hidden">Model Yükleniyor, lütfen bekleyin...</p>
+                <p id="error-text" class="error hidden"></p>
+            </div>
+        </section>
+
+        <!-- 2. KAMERA TARAMA EKRANI -->
+        <section id="camera-screen" class="screen hidden">
+            <div class="camera-header">
+                <h2>Atık Taranıyor...</h2>
+                <p>Kamerayı atığa doğru tutun</p>
+            </div>
+            <div class="canvas-container">
+                <!-- Teachable Machine WebCam buraya render edilecek -->
+                <div id="webcam-container"></div>
+                <div class="scan-line"></div>
+            </div>
+            <button class="btn btn-secondary" onclick="stopScanAndReturn()">Geri Dön</button>
+        </section>
+
+        <!-- 3. SONUÇ EKRANI -->
+        <section id="result-screen" class="screen hidden">
+            <div class="card result-card">
+                <h2>Tanıma Sonucu</h2>
+                
+                <div class="snapshot-container">
+                    <img id="snapshot-img" src="" alt="Yakalanan Görüntü">
+                </div>
+
+                <div class="primary-result">
+                    <h3 id="best-match-class">Tespit Edilen Atık: -</h3>
+                    <p id="best-match-prob" class="confidence">Eşleşme: %0</p>
+                </div>
+
+                <div class="thank-you-box">
+                    Sıfır atık projesine katkınızdan dolayı teşekkür ederiz 🌍
+                </div>
+
+                <div class="all-results">
+                    <h4>Tüm Sınıflar</h4>
+                    <div id="label-container">
+                        <!-- JS ile progress barlar buraya eklenecek -->
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-large" onclick="restartScan()">
+                    <span class="icon">🔄</span> Tekrar Tanıla
+                </button>
+            </div>
+        </section>
+
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
