@@ -6,6 +6,10 @@
     <title>Doğa Koruyucuları - Sıfır Atık</title>
     <link rel="stylesheet" href="style.css">
     
+    <!-- Cropper.js (Kırpma İşlemi İçin) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
     <!-- TensorFlow.js ve Teachable Machine Kütüphaneleri -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
@@ -13,34 +17,48 @@
 <body>
     <div class="app-container">
         
-        <!-- 1. ANA SAYFA VE FOTOĞRAF ÇEKME EKRANI -->
+        <!-- 1. ANA SAYFA -->
         <section id="home-screen" class="screen active">
             <div class="card">
                 <h1 class="title">Doğa Koruyucuları</h1>
                 <p class="description">Geri dönüşüm malzemelerini fotoğraflayarak sıfır atık projesine katkı sağlayın.</p>
                 
-                <!-- HTML5 Native Kamera Tetikleyici -->
                 <input type="file" accept="image/*" capture="environment" id="camera-input" class="hidden">
                 
                 <button id="start-btn" class="btn btn-primary" onclick="triggerCamera()">
                     <span class="icon">📸</span> Atığı Fotoğrafla
                 </button>
                 
-                <p id="loading-text" class="hidden">Yapay Zeka Atığı İnceliyor...</p>
+                <p id="loading-text" class="hidden">Yapay Zeka Yükleniyor...</p>
                 <p id="error-text" class="error hidden"></p>
             </div>
         </section>
 
-        <!-- Analiz İçin Gizli Resim Alanı -->
-        <img id="preview-image" class="hidden" alt="Analiz Edilen Görüntü">
+        <!-- 2. KIRPMA (CROP) EKRANI YENİ -->
+        <section id="crop-screen" class="screen hidden">
+            <div class="crop-header">
+                <h2>Atığı Ortala</h2>
+                <p>En iyi sonuç için atığı karenin içine alın</p>
+            </div>
+            <div class="crop-container">
+                <img id="image-to-crop" src="" alt="Kırpılacak Görüntü">
+            </div>
+            <div class="crop-actions">
+                <button class="btn btn-secondary" onclick="resetApp()">İptal</button>
+                <button class="btn btn-primary" id="analyze-btn" onclick="startAnalysis()">
+                    <span class="icon">✨</span> Analiz Et
+                </button>
+            </div>
+        </section>
 
-        <!-- 2. SONUÇ EKRANI -->
+        <!-- 3. SONUÇ EKRANI -->
         <section id="result-screen" class="screen hidden">
             <div class="card result-card">
                 <h2>Tanıma Sonucu</h2>
                 
                 <div class="snapshot-container">
-                    <img id="snapshot-img" src="" alt="Çekilen Atık Fotoğrafı">
+                    <!-- Artık sadece kırpılan kare alanı göstereceğiz -->
+                    <img id="snapshot-img" src="" alt="Kırpılan Atık Fotoğrafı">
                 </div>
 
                 <div class="primary-result">
@@ -54,9 +72,7 @@
 
                 <div class="all-results">
                     <h4>Eşleşme Detayları</h4>
-                    <div id="label-container">
-                        <!-- İstatistikler JavaScript ile buraya çizilecek -->
-                    </div>
+                    <div id="label-container"></div>
                 </div>
 
                 <button class="btn btn-primary btn-large" onclick="resetApp()">
@@ -66,7 +82,6 @@
         </section>
 
     </div>
-    
     <script src="script.js"></script>
 </body>
 </html>

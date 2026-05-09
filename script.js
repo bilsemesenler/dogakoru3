@@ -1,11 +1,11 @@
-// Model Yolları
 const URL = "./model/";
 
 let model, maxPredictions;
 let isModelLoaded = false;
-const THRESHOLD = 0.70; // %70 Eşik
+let cropper = null; // Kırpıcı objemiz
+const THRESHOLD = 0.70;
 
-// Ekran Geçiş Fonksiyonu
+// Ekranları Yönet
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
@@ -15,14 +15,12 @@ function showScreen(screenId) {
     document.getElementById(screenId).classList.add('active');
 }
 
-// 1. Modeli Yükle (Uygulama açıldığında veya ilk fotoğrafta yüklenir)
+// 1. Modeli Yükle
 async function loadModel() {
     if (isModelLoaded) return true;
-    
     try {
         const modelURL = URL + "model.json";
         const metadataURL = URL + "metadata.json";
-        
         model = await tmImage.load(modelURL, metadataURL);
         maxPredictions = model.getTotalClasses();
         isModelLoaded = true;
@@ -33,77 +31,105 @@ async function loadModel() {
     }
 }
 
-// 2. Kamera Butonuna Basıldığında Input'u Tetikle
+// 2. Kamera Butonuna Basıldığında
 async function triggerCamera() {
-    const errorText = document.getElementById("error-text");
-    errorText.classList.add("hidden");
-    
-    // Cihazın yerel kamerasını/galerisini açar
-    document.getElementById('camera-input').click();
-}
+    document.getElementById("error-text").classList.add("hidden");
+    document.getElementById("loading-text").classList.remove("hidden");
+    document.getElementById("start-btn").classList.add("hidden");
 
-// 3. Fotoğraf Çekildiğinde Tetiklenen Olay
-document.getElementById('camera-input').addEventListener('change', async function(e) {
-    const file = e.target.files[0];
-    if (!file) return; // Kullanıcı iptal ettiyse çık
-
-    const startBtn = document.getElementById("start-btn");
-    const loadingText = document.getElementById("loading-text");
-    const errorText = document.getElementById("error-text");
-
-    // UI'ı Yükleniyor durumuna al
-    startBtn.classList.add("hidden");
-    loadingText.classList.remove("hidden");
-
-    // Modeli yükle (Eğer henüz yüklenmediyse)
+    // Kamera açılmadan önce modeli arka planda hazırla
     const loaded = await loadModel();
     if (!loaded) {
-        loadingText.classList.add("hidden");
-        errorText.innerText = "Yapay Zeka modeli yüklenemedi. Lütfen internet bağlantınızı kontrol edin.";
+        document.getElementById("loading-text").classList.add("hidden");
+        const errorText = document.getElementById("error-text");
+        errorText.innerText = "Model yüklenemedi. İnternet bağlantınızı kontrol edin.";
         errorText.classList.remove("hidden");
-        startBtn.classList.remove("hidden");
+        document.getElementById("start-btn").classList.remove("hidden");
         return;
     }
 
-    // Seçilen dosyayı tarayıcıda geçici bir URL'ye çevirip gizli IMG etiketine bas
-    const imgElement = document.getElementById('preview-image');
-    imgElement.src = window.URL.createObjectURL(file);
+    document.getElementById("loading-text").classList.add("hidden");
+    document.getElementById("start-btn").classList.remove("hidden");
+    
+    // Kamerayı aç
+    document.getElementById('camera-input').click();
+}
 
-    // Resim DOM'a yüklendiğinde analizi başlat
-    imgElement.onload = async () => {
-        try {
-            await analyzeImage(imgElement);
-        } catch (err) {
-            console.error(err);
-            errorText.innerText = "Görüntü analiz edilirken bir hata oluştu.";
-            errorText.classList.remove("hidden");
-            startBtn.classList.remove("hidden");
-            loadingText.classList.add("hidden");
-        }
+// 3. Fotoğraf Çekildiğinde Kırpma Ekranına Geç
+document.getElementById('camera-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const imageURL = window.URL.createObjectURL(file);
+    const imageElement = document.getElementById('image-to-crop');
+    imageElement.src = imageURL;
+
+    showScreen('crop-screen');
+
+    // Eğer önceki bir kırpıcı varsa yok et
+    if (cropper) {
+        cropper.destroy();
+    }
+
+    // Yeni kırpıcıyı başlat
+    imageElement.onload = () => {
+        cropper = new Cropper(imageElement, {
+            aspectRatio: 1, // Yapay Zeka için 1:1 (Kare) zorunluluğu
+            viewMode: 1, // Kırpma kutusu resmin dışına çıkamaz
+            dragMode: 'move', // Mobilde tek parmakla resmi kaydırma
+            autoCropArea: 0.8, // Başlangıçta %80'lik bir alanı seç
+            guides: true,
+            center: true,
+            highlight: false,
+            cropBoxMovable: true,
+            cropBoxResizable: true,
+            toggleDragModeOnDblclick: false,
+        });
     };
 });
 
-// 4. Teachable Machine Görüntü Analizi
-async function analyzeImage(imageElement) {
-    // Fotoğraf üzerinden tek seferlik tahmin yap
-    const predictions = await model.predict(imageElement);
-    
-    // Sonuçları sırala ve en yüksek olanı bul
-    predictions.sort((a, b) => b.probability - a.probability);
-    const bestMatch = predictions[0];
+// 4. Kullanıcı "Analiz Et" Butonuna Bastığında
+async function startAnalysis() {
+    if (!cropper) return;
 
-    showResults(bestMatch, predictions, imageElement.src);
+    const analyzeBtn = document.getElementById('analyze-btn');
+    analyzeBtn.innerHTML = "Analiz Ediliyor...";
+    analyzeBtn.disabled = true;
+
+    // Kırpılan alanı bir Canvas olarak al (Teachable Machine 224x224 sever)
+    // Ancak yüksek çözünürlük alıp modelin küçültmesini sağlamak detayı artırır.
+    const croppedCanvas = cropper.getCroppedCanvas({
+        width: 400,
+        height: 400
+    });
+
+    // Kırpılan kare görüntüyü sonuç ekranı için sakla
+    const croppedImageURL = croppedCanvas.toDataURL("image/jpeg");
+
+    try {
+        // Doğrudan Canvas'ı Modele Besliyoruz!
+        const predictions = await model.predict(croppedCanvas);
+        
+        predictions.sort((a, b) => b.probability - a.probability);
+        const bestMatch = predictions[0];
+
+        showResults(bestMatch, predictions, croppedImageURL);
+    } catch (err) {
+        console.error(err);
+        alert("Analiz sırasında bir hata oluştu.");
+    } finally {
+        analyzeBtn.innerHTML = `<span class="icon">✨</span> Analiz Et`;
+        analyzeBtn.disabled = false;
+    }
 }
 
-// 5. Sonuçları Ekrana Yazdır
+// 5. Sonuçları Göster
 function showResults(bestMatch, allPredictions, imageSrc) {
-    // Fotoğrafı sonuç ekranına koy
     document.getElementById("snapshot-img").src = imageSrc;
 
     const percentProb = Math.round(bestMatch.probability * 100);
     const feedbackBox = document.getElementById("feedback-box");
     
-    // Eşik Kontrolü (%70 ve üzeri mi?)
     if (bestMatch.probability >= THRESHOLD) {
         document.getElementById("best-match-class").innerText = `Tespit Edilen Atık: ${bestMatch.className}`;
         document.getElementById("best-match-prob").innerText = `Güven Oranı: %${percentProb}`;
@@ -117,10 +143,9 @@ function showResults(bestMatch, allPredictions, imageSrc) {
         document.getElementById("best-match-prob").style.color = "var(--error-color)";
         
         feedbackBox.className = "thank-you-box warning-box";
-        feedbackBox.innerText = "Tam olarak emin olamadım. Atığı daha aydınlık bir ortamda, net bir şekilde tekrar fotoğraflamayı dener misiniz? 📸";
+        feedbackBox.innerText = "Tam olarak emin olamadım. Atığı çerçeveye tam oturtarak tekrar fotoğraflamayı dener misiniz? 📸";
     }
 
-    // Detaylı Bar İstatistikleri
     const labelContainer = document.getElementById("label-container");
     labelContainer.innerHTML = ""; 
 
@@ -133,27 +158,26 @@ function showResults(bestMatch, allPredictions, imageSrc) {
         row.innerHTML = `
             <div class="class-name">${allPredictions[i].className}</div>
             <div class="progress-wrapper">
-                <!-- Bar animasyonu için genişliği satır içi stille veriyoruz -->
                 <div class="progress-fill" style="width: 0%"></div> 
             </div>
             <div class="prob-text">%${probValue}</div>
         `;
         labelContainer.appendChild(row);
 
-        // Animasyonun tetiklenmesi için küçük bir gecikme (Reflow işlemi sonrası)
         setTimeout(() => {
             row.querySelector('.progress-fill').style.width = `${probValue}%`;
         }, 50);
     }
 
-    // Arayüz geçişleri
-    document.getElementById("loading-text").classList.add("hidden");
     showScreen('result-screen');
 }
 
-// 6. Sistemi Sıfırla ve Yeni Fotoğrafa Hazırlan
+// 6. Sistemi Sıfırla
 function resetApp() {
-    document.getElementById('camera-input').value = ""; // Input'u temizle
-    document.getElementById("start-btn").classList.remove("hidden");
+    document.getElementById('camera-input').value = "";
+    if (cropper) {
+        cropper.destroy();
+        cropper = null;
+    }
     showScreen('home-screen');
 }
